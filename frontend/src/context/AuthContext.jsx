@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { loginUser, registerUser } from '../services/authService';
+import { loginUser, registerUser, verify2faCode } from '../services/authService';
 import { normalizeAuthResponse } from '../utils/authResponse';
 import AuthContext from './auth-context';
 
@@ -43,6 +43,23 @@ export function AuthProvider({ children }) {
       setIsAuthLoading(true);
       try {
         const payload = await loginUser(credentials);
+        // If 2FA is required, don't store session yet, just return the payload
+        if (payload.requires_2fa) {
+          return payload;
+        }
+        return storeSession(payload);
+      } finally {
+        setIsAuthLoading(false);
+      }
+    },
+    [storeSession],
+  );
+  
+  const verify2fa = useCallback(
+    async (data) => {
+      setIsAuthLoading(true);
+      try {
+        const payload = await verify2faCode(data);
         return storeSession(payload);
       } finally {
         setIsAuthLoading(false);
@@ -83,10 +100,11 @@ export function AuthProvider({ children }) {
       isAuthenticated: Boolean(token || user),
       isAuthLoading,
       login,
+      verify2fa,
       register,
       logout,
     }),
-    [isAuthLoading, login, logout, register, token, user],
+    [isAuthLoading, login, verify2fa, logout, register, token, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
